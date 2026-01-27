@@ -11,11 +11,24 @@ import shutil
 load_dotenv()
 app = FastAPI()
 
-# Initialize Tools
+# Initialize Tools (But NOT the heavy model yet)
 pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
 index = pc.Index(os.getenv("PINECONE_INDEX_NAME"))
 groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
-embed_model = SentenceTransformer('all-MiniLM-L6-v2')
+
+# Global variable for the model (starts empty)
+embed_model = None
+
+def get_model():
+    """
+    Lazy Loader: This function downloads the model ONLY when we actually need it.
+    This prevents the 'Port Scan Timeout' error on Render.
+    """
+    global embed_model
+    if embed_model is None:
+        print("Loading AI Model... (This might take a moment)")
+        embed_model = SentenceTransformer('all-MiniLM-L6-v2')
+    return embed_model
 
 # Request Model
 class QueryRequest(BaseModel):
@@ -28,7 +41,10 @@ def retrieve_context(query_text, top_k=3):
     2. Search Pinecone for similar vectors
     3. Return the text from those vectors
     """
-    query_embedding = embed_model.encode(query_text).tolist()
+    # Load the model NOW (if not already loaded)
+    model = get_model()
+    
+    query_embedding = model.encode(query_text).tolist()
     
     results = index.query(
         vector=query_embedding,
@@ -64,13 +80,14 @@ async def chat(request: QueryRequest):
     {user_query}
     """
 
-    # Step 3: Call Groq (Llama 3)
+    # Step 3: Call Groq
+    # Note: We use the model you found earlier
     chat_completion = groq_client.chat.completions.create(
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt}
         ],
-        model="llama-3.3-70b-versatile", # Free, fast model
+        model="llama-3.3-70b-versatile", 
     )
 
     return {"answer": chat_completion.choices[0].message.content, "context_used": context}
@@ -80,11 +97,16 @@ async def chat(request: QueryRequest):
 async def upload_document(file: UploadFile = File(...)):
     # Save file temporarily
     file_path = f"documents/{file.filename}"
+    
+    # Ensure directory exists
+    if not os.path.exists("documents"):
+        os.makedirs("documents")
+
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
     
-    # Run ingestion (reusing logic from ingest.py)
-    # Ideally, import the function, but for simplicity, we call the script or logic here
+    # Run ingestion
+    # We import here to avoid circular logic or startup delays
     from ingest import ingest_file
     ingest_file(file_path)
     
