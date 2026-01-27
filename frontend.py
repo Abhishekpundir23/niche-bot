@@ -4,7 +4,7 @@ import requests
 # --- CONFIGURATION ---
 # If you are running locally, use localhost
 # If you deployed to Render, change this to your Render URL
-BACKEND_URL = "http://127.0.0.1:8000"
+BACKEND_URL = "https://niche-bot.onrender.com"
 
 st.set_page_config(page_title="Niche Knowledge Bot", page_icon="🤖")
 
