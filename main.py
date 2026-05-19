@@ -63,8 +63,7 @@ async def chat(request: QueryRequest):
     # Step 1: Find relevant data
     context = retrieve_context(user_query)
     
-    if not context:
-        return {"answer": "I couldn't find any relevant information in the documents."}
+    
 
     # Step 2: Prepare Prompt for Groq
     system_prompt = """You are a specialized expert assistant. 
